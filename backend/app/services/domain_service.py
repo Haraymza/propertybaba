@@ -11,6 +11,20 @@ def _oid(value: str) -> ObjectId:
     return ObjectId(value)
 
 
+def _assert_manager_or_admin(user: dict) -> None:
+    role = str(user.get("role") or "").lower()
+    if user.get("admin_flag") or role in {"manager", "admin", "super_admin"}:
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Manager or admin required")
+
+
+def _assert_admin(user: dict) -> None:
+    role = str(user.get("role") or "").lower()
+    if user.get("admin_flag") or role in {"admin", "super_admin"}:
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
+
+
 async def create_customer(db: AsyncIOMotorDatabase, payload: dict, user: dict) -> dict:
     now = datetime.now(timezone.utc)
     doc = {
@@ -24,6 +38,7 @@ async def create_customer(db: AsyncIOMotorDatabase, payload: dict, user: dict) -
         "deleted_at": None,
         "deleted_by": None,
         "created_at": now,
+        "notes": [],
     }
     result = await db.customers.insert_one(doc)
     doc["_id"] = result.inserted_id
@@ -60,6 +75,40 @@ async def update_customer(db: AsyncIOMotorDatabase, customer_id: str, payload: d
     return await db.customers.find_one({"_id": existing["_id"]})
 
 
+async def add_customer_note(db: AsyncIOMotorDatabase, customer_id: str, text: str, user: dict) -> dict:
+    _assert_manager_or_admin(user)
+    existing = await db.customers.find_one(
+        {"_id": _oid(customer_id), "organization_id": user["organization_id"], "is_deleted": {"$ne": True}}
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+
+    note = {
+        "_id": ObjectId(),
+        "text": text.strip(),
+        "created_at": datetime.now(timezone.utc),
+        "created_by": user.get("_id"),
+        "created_by_name": user.get("name"),
+    }
+    await db.customers.update_one({"_id": existing["_id"]}, {"$push": {"notes": note}, "$set": {"updated_by": user["_id"]}})
+    return note
+
+
+async def delete_customer_note(db: AsyncIOMotorDatabase, customer_id: str, note_id: str, user: dict) -> None:
+    _assert_admin(user)
+    existing = await db.customers.find_one(
+        {"_id": _oid(customer_id), "organization_id": user["organization_id"], "is_deleted": {"$ne": True}}
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
+    result = await db.customers.update_one(
+        {"_id": existing["_id"]},
+        {"$pull": {"notes": {"_id": _oid(note_id)}}, "$set": {"updated_by": user["_id"]}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+
+
 async def delete_customer(db: AsyncIOMotorDatabase, customer_id: str, user: dict) -> None:
     customer_obj_id = _oid(customer_id)
     deals_count = await db.deals.count_documents({"customer_id": customer_obj_id, "status": "in_process"})
@@ -86,6 +135,7 @@ async def create_property(db: AsyncIOMotorDatabase, payload: dict, user: dict) -
         "deleted_at": None,
         "deleted_by": None,
         "created_at": now,
+        "notes": [],
     }
     result = await db.properties.insert_one(doc)
     doc["_id"] = result.inserted_id
@@ -126,6 +176,40 @@ async def update_property(db: AsyncIOMotorDatabase, property_id: str, payload: d
     return await db.properties.find_one({"_id": existing["_id"]})
 
 
+async def add_property_note(db: AsyncIOMotorDatabase, property_id: str, text: str, user: dict) -> dict:
+    _assert_manager_or_admin(user)
+    existing = await db.properties.find_one(
+        {"_id": _oid(property_id), "organization_id": user["organization_id"], "is_deleted": {"$ne": True}}
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
+
+    note = {
+        "_id": ObjectId(),
+        "text": text.strip(),
+        "created_at": datetime.now(timezone.utc),
+        "created_by": user.get("_id"),
+        "created_by_name": user.get("name"),
+    }
+    await db.properties.update_one({"_id": existing["_id"]}, {"$push": {"notes": note}, "$set": {"updated_by": user["_id"]}})
+    return note
+
+
+async def delete_property_note(db: AsyncIOMotorDatabase, property_id: str, note_id: str, user: dict) -> None:
+    _assert_admin(user)
+    existing = await db.properties.find_one(
+        {"_id": _oid(property_id), "organization_id": user["organization_id"], "is_deleted": {"$ne": True}}
+    )
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Property not found")
+    result = await db.properties.update_one(
+        {"_id": existing["_id"]},
+        {"$pull": {"notes": {"_id": _oid(note_id)}}, "$set": {"updated_by": user["_id"]}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
+
+
 async def delete_property(db: AsyncIOMotorDatabase, property_id: str, user: dict) -> None:
     property_obj_id = _oid(property_id)
     deals_count = await db.deals.count_documents({"property_id": property_obj_id, "status": "in_process"})
@@ -142,10 +226,11 @@ async def delete_property(db: AsyncIOMotorDatabase, property_id: str, user: dict
 def _compute_financials(deal_price: int, defaults: dict) -> list[dict]:
     org_percent = float(defaults.get("org_percent", 10.0))
     agent_percent = float(defaults.get("agent_percent", 2.0))
+    org_revenue_cut = round((deal_price * org_percent) / 100, 2)
     return [
         {
             "deal_price": deal_price,
-            "org_revenue_cut": round((deal_price * org_percent) / 100, 2),
+            "org_revenue_cut": org_revenue_cut,
             "user_revenue_cut": round((deal_price * agent_percent) / 100, 2),
         }
     ]
@@ -327,7 +412,7 @@ async def agent_revenue_report(db: AsyncIOMotorDatabase, user: dict, window: str
             "$group": {
                 "_id": "$created_by",
                 "completed_deals": {"$sum": 1},
-                "gross_deal_value": {"$sum": "$financials.deal_price"},
+                "gross_revenue_total": {"$sum": "$financials.org_revenue_cut"},
                 "org_commission_total": {"$sum": "$financials.org_revenue_cut"},
                 "agent_commission_total": {"$sum": "$financials.user_revenue_cut"},
             }
@@ -344,15 +429,54 @@ async def agent_revenue_report(db: AsyncIOMotorDatabase, user: dict, window: str
     report: list[dict] = []
     for row in rows:
         user_doc = user_map.get(row["_id"], {})
+        gross_revenue = float(row.get("gross_revenue_total", row.get("org_commission_total", 0)))
+        agent_commission_total = float(row.get("agent_commission_total", 0))
         report.append(
             {
                 "user_id": str(row["_id"]) if row.get("_id") else None,
                 "agent_name": user_doc.get("name", "Unknown"),
                 "agent_phone": user_doc.get("phone"),
                 "completed_deals": int(row.get("completed_deals", 0)),
-                "gross_deal_value": float(row.get("gross_deal_value", 0)),
-                "org_commission_total": float(row.get("org_commission_total", 0)),
-                "agent_commission_total": float(row.get("agent_commission_total", 0)),
+                "org_commission_total": gross_revenue - agent_commission_total,
+                "agent_commission_total": agent_commission_total,
+                "gross_revenue": gross_revenue,
             }
         )
     return report
+
+
+async def agent_deal_breakdown(db: AsyncIOMotorDatabase, user: dict, agent_id: str, window: str = "all") -> list[dict]:
+    org_id = user["organization_id"]
+    match_filter: dict = {
+        "organization_id": org_id,
+        "status": "completed",
+        "is_deleted": {"$ne": True},
+        "created_by": _oid(agent_id),
+    }
+    if window == "month":
+        now = datetime.now(timezone.utc)
+        month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        match_filter["date_completed"] = {"$gte": month_start}
+
+    deals = await db.deals.find(match_filter).sort("date_completed", -1).to_list(length=500)
+    breakdown: list[dict] = []
+    for deal in deals:
+        financial = (deal.get("financials") or [{}])[0]
+        customer = await db.customers.find_one({"_id": deal.get("customer_id")}, {"name": 1})
+        prop = await db.properties.find_one({"_id": deal.get("property_id")}, {"title": 1})
+        org_cut = float(financial.get("org_revenue_cut", 0))
+        agent_cut = float(financial.get("user_revenue_cut", 0))
+        breakdown.append(
+            {
+                "deal_id": str(deal["_id"]),
+                "date_completed": deal.get("date_completed"),
+                "deal_type": deal.get("deal_type"),
+                "deal_value": float(financial.get("deal_price", 0)),
+                "org_commission": org_cut - agent_cut,
+                "agent_commission": agent_cut,
+                "gross_revenue": org_cut,
+                "customer_name": (customer or {}).get("name"),
+                "property_title": (prop or {}).get("title"),
+            }
+        )
+    return breakdown

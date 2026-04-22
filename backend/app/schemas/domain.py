@@ -7,11 +7,31 @@ from pydantic import BaseModel, Field
 from app.models.common import PyObjectId
 
 
+class EntityNote(BaseModel):
+    id: PyObjectId = Field(alias="_id")
+    text: str
+    created_at: datetime
+    created_by: PyObjectId | None = None
+    created_by_name: str | None = None
+
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str},
+    }
+
+
+class EntityNoteCreate(BaseModel):
+    text: str = Field(..., min_length=1, max_length=1000)
+
+
 class CustomerCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
     phone_number: list[str] = Field(..., min_length=1)
     preference: Literal["buy", "rent"] = "buy"
-    size: str = "Not specified"
+    size: str = ""
+    property_type: str = ""
+    requirements: str = ""
     priority: Literal["Low", "Medium", "High"] = "Medium"
 
 
@@ -20,6 +40,8 @@ class CustomerUpdate(BaseModel):
     phone_number: list[str] | None = None
     preference: Literal["buy", "rent"] | None = None
     size: str | None = None
+    property_type: str | None = None
+    requirements: str | None = None
     priority: Literal["Low", "Medium", "High"] | None = None
     status: Literal["in_process", "closed"] | None = None
 
@@ -29,7 +51,9 @@ class CustomerResponse(BaseModel):
     name: str
     phone_number: list[str]
     preference: str
-    size: str
+    size: str | None = None
+    property_type: str | None = None
+    requirements: str | None = None
     priority: str
     status: str
     properties_assigned: int
@@ -41,6 +65,7 @@ class CustomerResponse(BaseModel):
     deleted_at: datetime | None = None
     deleted_by: PyObjectId | None = None
     created_at: datetime
+    notes: list[EntityNote] = Field(default_factory=list)
 
     model_config = {
         "populate_by_name": True,
@@ -55,7 +80,7 @@ class PropertyCreate(BaseModel):
     price: int = Field(..., gt=0)
     type: Literal["sell", "rent"] = "sell"
     type_of_property: str = "House"
-    size: str = "Not specified"
+    size: str = ""
     seller_name: str
     seller_phone: list[str] = Field(..., min_length=1)
 
@@ -92,6 +117,7 @@ class PropertyResponse(BaseModel):
     deleted_at: datetime | None = None
     deleted_by: PyObjectId | None = None
     created_at: datetime
+    notes: list[EntityNote] = Field(default_factory=list)
 
     model_config = {
         "populate_by_name": True,

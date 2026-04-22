@@ -2,9 +2,17 @@ from fastapi import APIRouter, Depends
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.database import get_db
-from app.schemas.domain import PropertyCreate, PropertyResponse, PropertyUpdate
+from app.schemas.domain import EntityNote, EntityNoteCreate, PropertyCreate, PropertyResponse, PropertyUpdate
 from app.security.deps import require_organization
-from app.services.domain_service import create_property, delete_property, list_properties, restore_property, update_property
+from app.services.domain_service import (
+    add_property_note,
+    create_property,
+    delete_property,
+    delete_property_note,
+    list_properties,
+    restore_property,
+    update_property,
+)
 
 router = APIRouter()
 
@@ -42,6 +50,28 @@ async def put_property(
 async def remove_property(property_id: str, user: dict = Depends(require_organization), db: AsyncIOMotorDatabase = Depends(get_db)):
     await delete_property(db, property_id, user)
     return {"message": "Property archived"}
+
+
+@router.post("/{property_id}/notes", response_model=EntityNote, status_code=201)
+async def create_property_note(
+    property_id: str,
+    payload: EntityNoteCreate,
+    user: dict = Depends(require_organization),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    note = await add_property_note(db, property_id, payload.text, user)
+    return EntityNote(**note)
+
+
+@router.delete("/{property_id}/notes/{note_id}")
+async def remove_property_note(
+    property_id: str,
+    note_id: str,
+    user: dict = Depends(require_organization),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    await delete_property_note(db, property_id, note_id, user)
+    return {"message": "Note deleted"}
 
 
 @router.put("/{property_id}/restore", response_model=PropertyResponse)

@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.schemas.user import AdminCreateUserRequest, UserResponse, UserUpdateRequest
 from app.security.deps import require_organization
 from app.security.tokens import hash_password
-from app.services.domain_service import agent_revenue_report
+from app.services.domain_service import agent_deal_breakdown, agent_revenue_report
 
 router = APIRouter()
 
@@ -173,3 +173,16 @@ async def get_agent_revenue(
     if window not in {"all", "month"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="window must be one of: all, month")
     return await agent_revenue_report(db, user, window=window)
+
+
+@router.get("/revenue/agents/{agent_id}/deals")
+async def get_agent_revenue_deals(
+    agent_id: str,
+    window: str = "all",
+    user: dict = Depends(require_organization),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+):
+    require_admin_scope(user)
+    if window not in {"all", "month"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="window must be one of: all, month")
+    return await agent_deal_breakdown(db, user, agent_id=agent_id, window=window)
