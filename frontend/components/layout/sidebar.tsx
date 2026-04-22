@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import LogoPB from "../../LogoPB.png";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -34,11 +33,11 @@ export function Sidebar({
 }) {
   const navContent = (
     <>
-      <div className="flex h-20 items-center justify-between border-b border-[var(--border)] bg-[linear-gradient(180deg,rgba(79,70,229,0.12),rgba(79,70,229,0.04))] px-4">
+      <div className="flex h-16 items-center justify-between border-b border-[var(--border)] bg-[linear-gradient(180deg,rgba(79,70,229,0.12),rgba(79,70,229,0.04))] px-3">
         {!collapsed ? (
           <div className="flex items-center gap-3">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,_rgba(79,70,229,0.14),_rgba(79,70,229,0.06))] ring-1 ring-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
-              <Image src="/brand-logo.png" alt="Property Baba logo" width={26} height={26} className="rounded-md" />
+            <span className="inline-flex h-9 w-9 items-center justify-center">
+              <Image src={LogoPB} alt="Property Baba logo" width={24} height={24} className="rounded-md object-contain" />
             </span>
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted)]">Property Baba</p>
@@ -46,16 +45,13 @@ export function Sidebar({
             </div>
           </div>
         ) : (
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-[linear-gradient(135deg,_rgba(79,70,229,0.14),_rgba(79,70,229,0.06))] ring-1 ring-[color-mix(in_srgb,var(--accent)_24%,transparent)]">
-            <Image src="/brand-logo.png" alt="PB" width={22} height={22} className="mx-auto rounded-md" />
-          </span>
+          <div className="flex min-w-0 flex-1 items-center justify-center">
+            <Image src={LogoPB} alt="Property Baba logo" width={34} height={34} className="object-contain" />
+          </div>
         )}
-        <Button variant="ghost" onClick={onToggle} className="hidden h-8 w-8 px-0 lg:inline-flex">
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
       </div>
 
-      {!collapsed ? <p className="muted px-4 pb-2">{subtitle}</p> : null}
+      {!collapsed && subtitle ? <p className="muted px-4 pb-2">{subtitle}</p> : null}
 
       <nav className="space-y-1 px-2 py-3">
         {nav.map((item) => {

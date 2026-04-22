@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Filter, UserCircle2 } from "lucide-react";
 import { customersApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { assertEnum, toPhoneList, toRequiredText } from "@/lib/validators";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,7 +20,9 @@ export default function ManagerCustomersPage() {
   const [phoneInput, setPhoneInput] = useState("");
   const [preference, setPreference] = useState<"buy" | "rent">("buy");
   const [priority, setPriority] = useState<"Low" | "Medium" | "High">("Medium");
-  const [size, setSize] = useState("Not specified");
+  const [size, setSize] = useState("");
+  const [propertyType, setPropertyType] = useState<"House" | "Plot" | "Shop" | "Flat">("House");
+  const [requirements, setRequirements] = useState("");
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
@@ -30,8 +32,12 @@ export default function ManagerCustomersPage() {
   const [editPhones, setEditPhones] = useState("");
   const [editPreference, setEditPreference] = useState<"buy" | "rent">("buy");
   const [editPriority, setEditPriority] = useState<"Low" | "Medium" | "High">("Medium");
-  const [editSize, setEditSize] = useState("Not specified");
-  const [editStatus, setEditStatus] = useState<"in_process" | "closed">("in_process");
+  const [editSize, setEditSize] = useState("");
+  const [editPropertyType, setEditPropertyType] = useState<"House" | "Plot" | "Shop" | "Flat">("House");
+  const [editRequirements, setEditRequirements] = useState("");
+  const [notesCustomerId, setNotesCustomerId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
   const { user } = useAuthStore();
   const query = useQuery({
     queryKey: ["customers", search, showArchived],
@@ -43,18 +49,25 @@ export default function ManagerCustomersPage() {
     setSaving(true);
     setError("");
     try {
+      const safeName = toRequiredText("Customer name", name);
+      const safePhones = toPhoneList("Phone numbers", phoneInput);
+      const safePreference = assertEnum("Preference", preference, ["buy", "rent"] as const);
+      const safePriority = assertEnum("Priority", priority, ["Low", "Medium", "High"] as const);
+      const safePropertyType = assertEnum("Property type", propertyType, ["House", "Plot", "Shop", "Flat"] as const);
       await customersApi.create({
-        name,
-        phone_number: phoneInput
-          .split(",")
-          .map((x) => x.trim())
-          .filter(Boolean),
-        preference,
+        name: safeName,
+        phone_number: safePhones,
+        preference: safePreference,
         size,
-        priority,
+        property_type: safePropertyType,
+        requirements,
+        priority: safePriority,
       });
       setName("");
       setPhoneInput("");
+      setSize("");
+      setPropertyType("House");
+      setRequirements("");
       await query.refetch();
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to create customer"));
@@ -80,20 +93,51 @@ export default function ManagerCustomersPage() {
     setEditPhones(customer.phone_number.join(", "));
     setEditPreference(customer.preference);
     setEditPriority(customer.priority);
-    setEditSize(customer.size);
-    setEditStatus(customer.status);
+    setEditSize(customer.size || "");
+    setEditPropertyType((customer.property_type as "House" | "Plot" | "Shop" | "Flat") || "House");
+    setEditRequirements(customer.requirements || "");
   };
   const saveEdit = async () => {
     if (!editingId) return;
-    await customersApi.update(editingId, {
-      name: editName,
-      phone_number: editPhones.split(",").map((x) => x.trim()).filter(Boolean),
-      preference: editPreference,
-      priority: editPriority,
-      size: editSize,
-      status: editStatus,
-    });
-    setEditingId(null);
+    setError("");
+    try {
+      const safeName = toRequiredText("Customer name", editName);
+      const safePhones = toPhoneList("Phone numbers", editPhones);
+      const safePreference = assertEnum("Preference", editPreference, ["buy", "rent"] as const);
+      const safePriority = assertEnum("Priority", editPriority, ["Low", "Medium", "High"] as const);
+      const safePropertyType = assertEnum("Property type", editPropertyType, ["House", "Plot", "Shop", "Flat"] as const);
+      await customersApi.update(editingId, {
+        name: safeName,
+        phone_number: safePhones,
+        preference: safePreference,
+        priority: safePriority,
+        size: editSize,
+        property_type: safePropertyType,
+        requirements: editRequirements,
+      });
+      setEditingId(null);
+      await query.refetch();
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Failed to update customer"));
+    }
+  };
+  const selectedCustomer = (query.data?.data || []).find((customer) => customer._id === notesCustomerId) || null;
+
+  const addCustomerNote = async () => {
+    if (!notesCustomerId || !noteText.trim()) return;
+    setNotesSaving(true);
+    try {
+      await customersApi.addNote(notesCustomerId, noteText.trim());
+      setNoteText("");
+      await query.refetch();
+    } finally {
+      setNotesSaving(false);
+    }
+  };
+
+  const deleteCustomerNote = async (customerId: string, noteId: string) => {
+    if (!window.confirm("Delete this note?")) return;
+    await customersApi.deleteNote(customerId, noteId);
     await query.refetch();
   };
 
@@ -115,18 +159,48 @@ export default function ManagerCustomersPage() {
           </CardHeader>
           <CardContent>
             <form className="space-y-3" onSubmit={createCustomer}>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Customer name" required />
-              <Input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="Phone numbers (comma separated)" required />
-              <Select value={preference} onChange={(e) => setPreference(e.target.value as "buy" | "rent")}>
-                <option value="buy">buy</option>
-                <option value="rent">rent</option>
-              </Select>
-              <Select value={priority} onChange={(e) => setPriority(e.target.value as "Low" | "Medium" | "High")}>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </Select>
-              <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="Size requirement" />
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Customer Name</p>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Bilal Ahmed" required />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Phone Numbers</p>
+                  <Input value={phoneInput} onChange={(e) => setPhoneInput(e.target.value)} placeholder="03001234567, 03211234567" required />
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Preference</p>
+                  <Select value={preference} onChange={(e) => setPreference(e.target.value as "buy" | "rent")}>
+                    <option value="buy">buy</option>
+                    <option value="rent">rent</option>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Priority</p>
+                  <Select value={priority} onChange={(e) => setPriority(e.target.value as "Low" | "Medium" | "High")}>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Property Type</p>
+                  <Select value={propertyType} onChange={(e) => setPropertyType(e.target.value as "House" | "Plot" | "Shop" | "Flat")}>
+                    <option value="House">House</option>
+                    <option value="Plot">Plot</option>
+                    <option value="Shop">Shop</option>
+                    <option value="Flat">Flat</option>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Size</p>
+                  <Input value={size} onChange={(e) => setSize(e.target.value)} placeholder="5 Marla / 1200 sq ft" />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Requirements</p>
+                  <Input value={requirements} onChange={(e) => setRequirements(e.target.value)} placeholder="Near park, corner house, 3 bed" className="md:col-span-2" />
+                </div>
+              </div>
               {error ? <p className="text-sm text-red-600">{error}</p> : null}
               <Button className="w-full" disabled={saving}>
                 {saving ? "Saving..." : "Save Customer"}
@@ -157,45 +231,76 @@ export default function ManagerCustomersPage() {
                   <th className="px-3 py-2">Name</th>
                   <th className="px-3 py-2">Phones</th>
                   <th className="px-3 py-2">Preference</th>
+                  <th className="px-3 py-2">Property Type</th>
                   <th className="px-3 py-2">Size</th>
+                  <th className="px-3 py-2">Requirements</th>
                   <th className="px-3 py-2">Priority</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Created By</th>
                   <th className="px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {(query.data?.data || []).map((c) => (
-                  <tr key={c._id}>
+                  <tr
+                    key={c._id}
+                    className="cursor-pointer hover:bg-[var(--surface-muted)]"
+                    onClick={() => setNotesCustomerId(c._id)}
+                  >
                     <td className="px-3 py-2 font-medium">
                       <div className="flex items-center gap-2">
-                        <UserCircle2 className="h-4 w-4 text-[var(--muted)]" />
-                        <Link className="hover:underline" href={`/manager/customers/${c._id}`}>
-                          {c.name}
-                        </Link>
+                        <UserCircle2 className="h-4 w-4 shrink-0 text-[var(--muted)]" />
+                        <span className="text-left hover:underline">{c.name}</span>
                       </div>
                     </td>
                     <td className="px-3 py-2">{c.phone_number.join(", ")}</td>
                     <td className="px-3 py-2">{c.preference}</td>
-                    <td className="px-3 py-2">{c.size}</td>
+                    <td className="px-3 py-2">{c.property_type || "-"}</td>
+                    <td className="px-3 py-2">{c.size || "-"}</td>
+                    <td className="px-3 py-2">{c.requirements || "-"}</td>
                     <td className="px-3 py-2">{c.priority}</td>
-                    <td className="px-3 py-2">{c.status}</td>
-                    <td className="px-3 py-2">{c.created_by_name || "-"}</td>
-                    <td className="px-3 py-2 flex gap-2">
+                    <td className="px-3 py-2">
+                      <div className="flex gap-2">
                       {user?.admin_flag ? (
-                        <Button variant="secondary" onClick={() => startEdit(c._id)}>
-                          Edit
+                        <Button
+                          className="h-8 px-2.5"
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startEdit(c._id);
+                          }}
+                          title="Edit customer"
+                          aria-label="Edit customer"
+                        >
+                          <span className="text-[11px] font-semibold text-[var(--foreground)]">Edit</span>
                         </Button>
                       ) : null}
                       {!c.is_deleted ? (
-                        <Button variant="danger" onClick={() => archiveCustomer(c._id)}>
-                          Archive
+                        <Button
+                          className="h-8 px-2.5"
+                          variant="danger"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            archiveCustomer(c._id);
+                          }}
+                          title="Archive customer"
+                          aria-label="Archive customer"
+                        >
+                          <span className="text-[10px] font-semibold text-[var(--foreground)]">Archive</span>
                         </Button>
                       ) : (
-                        <Button variant="secondary" onClick={() => restoreCustomer(c._id)}>
-                          Restore
+                        <Button
+                          className="h-8 px-2.5"
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            restoreCustomer(c._id);
+                          }}
+                          title="Restore customer"
+                          aria-label="Restore customer"
+                        >
+                          <span className="text-[10px] font-semibold text-[var(--foreground)]">Restore</span>
                         </Button>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -206,27 +311,112 @@ export default function ManagerCustomersPage() {
             <Popup open onOpenChange={() => setEditingId(null)}>
               <PopupContent title="Edit Customer">
                 <div className="space-y-3">
-                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Customer name" />
-                  <Input value={editPhones} onChange={(e) => setEditPhones(e.target.value)} placeholder="Phone numbers (comma separated)" />
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Customer Name</p>
+                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Customer name" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Phone Numbers</p>
+                    <Input value={editPhones} onChange={(e) => setEditPhones(e.target.value)} placeholder="Phone numbers (comma separated)" />
+                  </div>
                   <div className="grid gap-3 md:grid-cols-2">
-                    <Select value={editPreference} onChange={(e) => setEditPreference(e.target.value as "buy" | "rent")}>
-                      <option value="buy">buy</option>
-                      <option value="rent">rent</option>
-                    </Select>
-                    <Select value={editPriority} onChange={(e) => setEditPriority(e.target.value as "Low" | "Medium" | "High")}>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </Select>
-                    <Select value={editStatus} onChange={(e) => setEditStatus(e.target.value as "in_process" | "closed")}>
-                      <option value="in_process">in_process</option>
-                      <option value="closed">closed</option>
-                    </Select>
-                    <Input value={editSize} onChange={(e) => setEditSize(e.target.value)} placeholder="Size requirement" />
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Preference</p>
+                      <Select value={editPreference} onChange={(e) => setEditPreference(e.target.value as "buy" | "rent")}>
+                        <option value="buy">buy</option>
+                        <option value="rent">rent</option>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Priority</p>
+                      <Select value={editPriority} onChange={(e) => setEditPriority(e.target.value as "Low" | "Medium" | "High")}>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Size Requirement</p>
+                      <Input value={editSize} onChange={(e) => setEditSize(e.target.value)} placeholder="Size requirement" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Property Type</p>
+                      <Select value={editPropertyType} onChange={(e) => setEditPropertyType(e.target.value as "House" | "Plot" | "Shop" | "Flat")}>
+                        <option value="House">House</option>
+                        <option value="Plot">Plot</option>
+                        <option value="Shop">Shop</option>
+                        <option value="Flat">Flat</option>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Requirements</p>
+                      <Input value={editRequirements} onChange={(e) => setEditRequirements(e.target.value)} placeholder="Requirements" />
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Button onClick={saveEdit}>Save Changes</Button>
                     <Button variant="ghost" onClick={() => setEditingId(null)}>Cancel</Button>
+                  </div>
+                </div>
+              </PopupContent>
+            </Popup>
+          ) : null}
+          {selectedCustomer ? (
+            <Popup open onOpenChange={(open) => !open && setNotesCustomerId(null)}>
+              <PopupContent title="Customer Notes">
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]/50 p-4">
+                    <div className="mb-3">
+                      <p className="text-base font-semibold">{selectedCustomer.name}</p>
+                      <p className="text-sm text-[var(--muted)]">{selectedCustomer.phone_number.join(", ")}</p>
+                    </div>
+                    <div className="grid gap-2 text-sm md:grid-cols-2">
+                      <p><span className="font-semibold">Preference:</span> {selectedCustomer.preference}</p>
+                      <p><span className="font-semibold">Priority:</span> {selectedCustomer.priority}</p>
+                      <p><span className="font-semibold">Property Type:</span> {selectedCustomer.property_type || "-"}</p>
+                      <p><span className="font-semibold">Size:</span> {selectedCustomer.size || "-"}</p>
+                      <p className="md:col-span-2"><span className="font-semibold">Requirements:</span> {selectedCustomer.requirements || "-"}</p>
+                      <p className="md:col-span-2 text-[var(--muted)]"><span className="font-semibold">Created by:</span> {selectedCustomer.created_by_name || "-"}</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Input
+                      value={noteText}
+                      onChange={(e) => setNoteText(e.target.value)}
+                      placeholder="Add a note..."
+                    />
+                    <Button disabled={!noteText.trim() || notesSaving} onClick={addCustomerNote}>
+                      {notesSaving ? "Adding..." : "Add Note"}
+                    </Button>
+                  </div>
+                  <div className="max-h-72 space-y-2 overflow-y-auto">
+                    {selectedCustomer.notes?.length ? (
+                      [...selectedCustomer.notes]
+                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                        .map((note) => (
+                          <div key={note._id} className="rounded-lg border border-[var(--border)] p-3 text-sm">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="flex-1">{note.text}</p>
+                              {user?.admin_flag ? (
+                                <Button
+                                  className="h-7 w-7 p-0 border border-[var(--border)]"
+                                  variant="secondary"
+                                  onClick={() => deleteCustomerNote(selectedCustomer._id, note._id)}
+                                  title="Delete note"
+                                  aria-label="Delete note"
+                                >
+                                  <span className="text-[11px] font-bold text-[var(--foreground)]">X</span>
+                                </Button>
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-xs text-[var(--muted)]">
+                              {new Date(note.created_at).toLocaleString()} {note.created_by_name ? `by ${note.created_by_name}` : ""}
+                            </p>
+                          </div>
+                        ))
+                    ) : (
+                      <p className="text-sm text-[var(--muted)]">No notes yet.</p>
+                    )}
                   </div>
                 </div>
               </PopupContent>

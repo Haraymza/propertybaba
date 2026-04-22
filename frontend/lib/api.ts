@@ -108,12 +108,22 @@ export type User = {
   created_at: string;
 };
 
+export type EntityNote = {
+  _id: string;
+  text: string;
+  created_at: string;
+  created_by?: string | null;
+  created_by_name?: string | null;
+};
+
 export type Customer = {
   _id: string;
   name: string;
   phone_number: string[];
   preference: "buy" | "rent";
-  size: string;
+  size?: string;
+  property_type?: string;
+  requirements?: string;
   priority: "Low" | "Medium" | "High";
   status: "in_process" | "closed";
   properties_assigned: number;
@@ -121,6 +131,7 @@ export type Customer = {
   created_by_name?: string | null;
   is_deleted?: boolean;
   created_at: string;
+  notes?: EntityNote[];
 };
 
 export type Property = {
@@ -138,6 +149,7 @@ export type Property = {
   created_by_name?: string | null;
   is_deleted?: boolean;
   created_at: string;
+  notes?: EntityNote[];
 };
 
 export type Deal = {
@@ -167,9 +179,21 @@ export type AgentRevenueRow = {
   agent_name: string;
   agent_phone?: string | null;
   completed_deals: number;
-  gross_deal_value: number;
+  gross_revenue: number;
   org_commission_total: number;
   agent_commission_total: number;
+};
+
+export type AgentDealRevenue = {
+  deal_id: string;
+  date_completed?: string | null;
+  deal_type?: "buy" | "rent";
+  deal_value: number;
+  org_commission: number;
+  agent_commission: number;
+  gross_revenue: number;
+  customer_name?: string;
+  property_title?: string;
 };
 
 export type DashboardStats = {
@@ -219,6 +243,8 @@ export const customersApi = {
   update: (id: string, payload: Partial<Customer>) => api.put<Customer>(`/api/customers/${id}`, payload),
   remove: (id: string) => api.delete<{ message: string }>(`/api/customers/${id}`),
   restore: (id: string) => api.put<Customer>(`/api/customers/${id}/restore`),
+  addNote: (customerId: string, text: string) => api.post<EntityNote>(`/api/customers/${customerId}/notes`, { text }),
+  deleteNote: (customerId: string, noteId: string) => api.delete<{ message: string }>(`/api/customers/${customerId}/notes/${noteId}`),
 };
 
 export const propertiesApi = {
@@ -227,6 +253,8 @@ export const propertiesApi = {
   update: (id: string, payload: Partial<Property>) => api.put<Property>(`/api/properties/${id}`, payload),
   remove: (id: string) => api.delete<{ message: string }>(`/api/properties/${id}`),
   restore: (id: string) => api.put<Property>(`/api/properties/${id}/restore`),
+  addNote: (propertyId: string, text: string) => api.post<EntityNote>(`/api/properties/${propertyId}/notes`, { text }),
+  deleteNote: (propertyId: string, noteId: string) => api.delete<{ message: string }>(`/api/properties/${propertyId}/notes/${noteId}`),
 };
 
 export const dealsApi = {
@@ -255,4 +283,6 @@ export const adminApi = {
   updateCommissionDefaults: (payload: CommissionDefaults) =>
     api.put("/api/admin/organization/commission-defaults", null, { params: payload }),
   agentRevenue: (params?: { window?: "all" | "month" }) => api.get<AgentRevenueRow[]>("/api/admin/revenue/agents", { params }),
+  agentRevenueDeals: (agentId: string, params?: { window?: "all" | "month" }) =>
+    api.get<AgentDealRevenue[]>(`/api/admin/revenue/agents/${agentId}/deals`, { params }),
 };

@@ -3,9 +3,10 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Handshake, Kanban, Search } from "lucide-react";
-import { adminApi, customersApi, dealsApi, propertiesApi } from "@/lib/api";
+import { customersApi, dealsApi, propertiesApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatPKR, splitAddressParts } from "@/lib/formatters";
+import { assertEnum, toRequiredNumber, toRequiredText } from "@/lib/validators";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +18,6 @@ export default function ManagerDealsPage() {
   const [activeTab, setActiveTab] = useState<"create" | "list">("list");
   const [customerId, setCustomerId] = useState("");
   const [propertyId, setPropertyId] = useState("");
-  const [dealType, setDealType] = useState<"buy" | "rent">("buy");
   const [price, setPrice] = useState(0);
   const [overrideCommission, setOverrideCommission] = useState(false);
   const [orgPercent, setOrgPercent] = useState(10);
@@ -35,12 +35,22 @@ export default function ManagerDealsPage() {
   const customersQ = useQuery({ queryKey: ["customers"], queryFn: () => customersApi.list() });
   const propertiesQ = useQuery({ queryKey: ["properties"], queryFn: () => propertiesApi.list() });
   const dealsQ = useQuery({ queryKey: ["deals", showArchived, search], queryFn: () => dealsApi.list({ include_archived: showArchived, q: search || undefined }) });
-  const commissionQ = useQuery({ queryKey: ["commission-defaults"], queryFn: () => adminApi.getCommissionDefaults() });
 
-  const availableProperties = useMemo(
-    () => (propertiesQ.data?.data || []).filter((p) => p.status === "available"),
-    [propertiesQ.data],
+  const selectedCustomer = useMemo(
+    () => (customersQ.data?.data || []).find((c) => c._id === customerId) || null,
+    [customersQ.data, customerId],
   );
+  const availableProperties = useMemo(() => {
+    const allAvailable = (propertiesQ.data?.data || []).filter((p) => p.status === "available");
+    if (!selectedCustomer) return allAvailable;
+    const requiredPropertyType = selectedCustomer.preference === "rent" ? "rent" : "sell";
+    return allAvailable.filter((p) => p.type === requiredPropertyType);
+  }, [propertiesQ.data, selectedCustomer]);
+  const selectedProperty = useMemo(
+    () => availableProperties.find((p) => p._id === propertyId) || null,
+    [availableProperties, propertyId],
+  );
+  const resolvedDealType = selectedProperty ? (selectedProperty.type === "rent" ? "rent" : "buy") : "";
   const filteredCustomers = useMemo(() => {
     const customers = customersQ.data?.data || [];
     const query = customerSearch.trim().toLowerCase();
@@ -68,24 +78,28 @@ export default function ManagerDealsPage() {
     setSaving(true);
     setError("");
     try {
-      if (!customerId || !propertyId) {
-        setError("Please select a customer and property from search results.");
-        setSaving(false);
-        return;
-      }
+      const safeCustomerId = toRequiredText("Customer", customerId);
+      const safePropertyId = toRequiredText("Property", propertyId);
+      const safeDealType = assertEnum("Deal type", resolvedDealType, ["buy", "rent"] as const);
       const financials = overrideCommission
-        ? [
-            {
-              deal_price: Number(price),
-              org_revenue_cut: (Number(price) * orgPercent) / 100,
-              user_revenue_cut: (Number(price) * agentPercent) / 100,
-            },
-          ]
+        ? (() => {
+            const dealPrice = toRequiredNumber("Deal price", price, { min: 1 });
+            const safeOrgPercent = toRequiredNumber("Organization percent", orgPercent, { min: 0, max: 100 });
+            const safeAgentPercent = toRequiredNumber("Agent percent", agentPercent, { min: 0, max: 100 });
+            const orgRevenueCut = (dealPrice * safeOrgPercent) / 100;
+            return [
+              {
+                deal_price: dealPrice,
+                org_revenue_cut: orgRevenueCut,
+                user_revenue_cut: (dealPrice * safeAgentPercent) / 100,
+              },
+            ];
+          })()
         : undefined;
       await dealsApi.create({
-        customer_id: customerId,
-        property_id: propertyId,
-        deal_type: dealType,
+        customer_id: safeCustomerId,
+        property_id: safePropertyId,
+        deal_type: safeDealType,
         financials,
         override_commission: overrideCommission,
       });
@@ -134,8 +148,6 @@ export default function ManagerDealsPage() {
     }
   };
 
-  const defaults = commissionQ.data?.data;
-
   return (
     <main className="space-y-6">
       <PageHeader title="Deals Pipeline" description="Kanban-style execution view with commission context." />
@@ -158,18 +170,22 @@ export default function ManagerDealsPage() {
           <CardContent>
             <form className="space-y-3" onSubmit={createDeal}>
               <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Customer</p>
                 <div className="relative">
                   <Input
                     value={customerSearch}
                     onFocus={() => setShowCustomerDropdown(true)}
                     onChange={(e) => {
                       setCustomerSearch(e.target.value);
+                      setCustomerId("");
+                      setPropertyId("");
+                      setPropertySearch("");
                       setShowCustomerDropdown(true);
                     }}
                     placeholder="Search customer by name or number..."
                   />
                   {showCustomerDropdown && customerSearch.trim() ? (
-                    <div className="absolute z-10 mt-1 max-h-44 w-full overflow-auto rounded-lg border border-[var(--border)] bg-white shadow-sm">
+                    <div className="absolute z-10 mt-1 max-h-44 w-full overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-sm">
                       {filteredCustomers.map((c) => (
                         <button
                           key={c._id}
@@ -177,9 +193,11 @@ export default function ManagerDealsPage() {
                           onClick={() => {
                             setCustomerId(c._id);
                             setCustomerSearch(`${c.name} (${c.phone_number.join(", ")})`);
+                            setPropertyId("");
+                            setPropertySearch("");
                             setShowCustomerDropdown(false);
                           }}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-[var(--surface-muted)] ${
+                          className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-[var(--surface-muted)] ${
                             customerId === c._id ? "bg-[var(--surface-muted)]" : ""
                           }`}
                         >
@@ -195,18 +213,20 @@ export default function ManagerDealsPage() {
                 </div>
               </div>
               <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Property</p>
                 <div className="relative">
                   <Input
                     value={propertySearch}
                     onFocus={() => setShowPropertyDropdown(true)}
                     onChange={(e) => {
                       setPropertySearch(e.target.value);
+                      setPropertyId("");
                       setShowPropertyDropdown(true);
                     }}
                     placeholder="Search property by name, address, seller, or number..."
                   />
                   {showPropertyDropdown && propertySearch.trim() ? (
-                    <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-lg border border-[var(--border)] bg-white shadow-sm">
+                    <div className="absolute z-10 mt-1 max-h-52 w-full overflow-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-sm">
                       {filteredProperties.map((p) => (
                         <button
                           key={p._id}
@@ -214,11 +234,10 @@ export default function ManagerDealsPage() {
                           onClick={() => {
                             setPropertyId(p._id);
                             setPropertySearch(`${p.title} - ${splitAddressParts(p.address).join(", ") || p.address}`);
-                            setDealType(p.type === "rent" ? "rent" : "buy");
                             setPrice(Number(p.price || 0));
                             setShowPropertyDropdown(false);
                           }}
-                          className={`w-full px-3 py-2 text-left text-sm hover:bg-[var(--surface-muted)] ${
+                          className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-[var(--surface-muted)] ${
                             propertyId === p._id ? "bg-[var(--surface-muted)]" : ""
                           }`}
                         >
@@ -230,27 +249,34 @@ export default function ManagerDealsPage() {
                         </button>
                       ))}
                       {filteredProperties.length === 0 ? (
-                        <p className="px-3 py-2 text-sm text-[var(--muted)]">No properties found.</p>
+                        <p className="px-3 py-2 text-sm text-[var(--muted)]">
+                          {selectedCustomer
+                            ? `No ${selectedCustomer.preference === "rent" ? "rent" : "sell"} properties found.`
+                            : "No properties found."}
+                        </p>
                       ) : null}
                     </div>
                   ) : null}
                 </div>
               </div>
-              <Input value={price || ""} onChange={(e) => setPrice(Number(e.target.value || 0))} type="number" placeholder="Deal price" required />
-              <Input value={dealType} readOnly />
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
-                <p className="font-medium text-slate-900">Commission rules</p>
-                <p className="text-xs text-slate-600">
-                  Defaults: org {defaults?.org_percent ?? 10}% / agent {defaults?.agent_percent ?? 2}%
-                </p>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Deal Price</p>
+                <Input value={price || ""} onChange={(e) => setPrice(Number(e.target.value || 0))} type="number" placeholder="12500000" required />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Type of Deal</p>
+                <Input value={resolvedDealType || "Select a property first"} readOnly />
+              </div>
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-sm">
+                <p className="font-medium text-[var(--foreground)]">Commission rules</p>
                 <label className="mt-2 flex items-center gap-2">
                   <input type="checkbox" checked={overrideCommission} onChange={(e) => setOverrideCommission(e.target.checked)} />
                   Override on this deal
                 </label>
                 {overrideCommission ? (
                   <div className="mt-2 grid grid-cols-2 gap-2">
-                    <Input value={orgPercent} onChange={(e) => setOrgPercent(Number(e.target.value || 0))} type="number" placeholder="Org %" />
-                    <Input value={agentPercent} onChange={(e) => setAgentPercent(Number(e.target.value || 0))} type="number" placeholder="Agent %" />
+                    <Input value={orgPercent} onChange={(e) => setOrgPercent(Number(e.target.value || 0))} type="number" placeholder="Org % of deal" />
+                    <Input value={agentPercent} onChange={(e) => setAgentPercent(Number(e.target.value || 0))} type="number" placeholder="Agent % of deal" />
                   </div>
                 ) : null}
               </div>

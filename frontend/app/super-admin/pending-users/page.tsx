@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { UserCheck } from "lucide-react";
 import { superAdminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { toRequiredText } from "@/lib/validators";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -35,8 +36,7 @@ export default function PendingUsersPage() {
     setError("");
     setMessage("");
     try {
-      const orgId = selectedOrgByUser[userId];
-      if (!orgId) throw new Error("Please select an organization first");
+      const orgId = toRequiredText("Organization", selectedOrgByUser[userId] || "");
       await superAdminApi.assignOrganization(userId, orgId);
       await superAdminApi.approveUser(userId);
       setMessage("User assigned and approved");

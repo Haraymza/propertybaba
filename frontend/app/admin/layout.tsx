@@ -17,7 +17,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <AppShell
       title="Admin Workspace"
-      subtitle="Organization controls and operations"
+      subtitle=""
       roleLabel="Admin"
       userName={user.name}
       onLogout={clearSession}

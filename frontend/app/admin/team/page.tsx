@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Shield, User } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { assertEnum, toOptionalText, toRequiredText } from "@/lib/validators";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -33,12 +34,17 @@ export default function AdminTeamPage() {
     setSaving(true);
     setError("");
     try {
+      const safeName = toRequiredText("Name", name);
+      const safePhone = toRequiredText("Phone", phone);
+      const safeEmail = toOptionalText(email);
+      const safePassword = toRequiredText("Password", password);
+      const safeRole = assertEnum("Role", role, ["manager", "admin"] as const);
       await adminApi.createUser({
-        name,
-        phone,
-        email: email || undefined,
-        password,
-        role,
+        name: safeName,
+        phone: safePhone,
+        email: safeEmail,
+        password: safePassword,
+        role: safeRole,
       });
       setName("");
       setPhone("");
@@ -72,12 +78,17 @@ export default function AdminTeamPage() {
     if (!editingId) return;
     setError("");
     try {
+      const safeName = toRequiredText("Name", editName);
+      const safePhone = toRequiredText("Phone", editPhone);
+      const safeEmail = toOptionalText(editEmail);
+      const safePassword = toOptionalText(editPassword);
+      const safeRole = assertEnum("Role", editRole, ["manager", "admin"] as const);
       await adminApi.updateUser(editingId, {
-        name: editName,
-        phone: editPhone,
-        email: editEmail,
-        password: editPassword || undefined,
-        role: editRole,
+        name: safeName,
+        phone: safePhone,
+        email: safeEmail,
+        password: safePassword,
+        role: safeRole,
       });
       setEditingId(null);
       await q.refetch();

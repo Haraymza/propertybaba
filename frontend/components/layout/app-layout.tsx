@@ -67,7 +67,7 @@ export function AppLayout({
   };
 
   return (
-    <div className="flex min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-300">
+    <div className="flex min-h-screen bg-[radial-gradient(circle_at_8%_0%,color-mix(in_srgb,var(--accent)_12%,transparent),transparent_28%),radial-gradient(circle_at_94%_0%,color-mix(in_srgb,var(--accent)_10%,transparent),transparent_26%),var(--background)] text-[var(--foreground)] transition-colors duration-300">
       <Sidebar
         nav={nav}
         title={title}
@@ -84,6 +84,8 @@ export function AppLayout({
           userName={userName}
           organizationName={contextQ.data?.data?.organization_name}
           showOrganization={!isSuperAdmin}
+          sidebarCollapsed={collapsed}
+          onToggleDesktopSidebar={() => setCollapsed((v) => !v)}
           onToggleMobileSidebar={() => setMobileOpen((v) => !v)}
           onLogout={handleLogout}
         />

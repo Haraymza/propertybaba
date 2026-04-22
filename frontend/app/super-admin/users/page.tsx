@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { superAdminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { assertEnum, toOptionalText, toRequiredText } from "@/lib/validators";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -39,12 +40,14 @@ export default function SuperAdminUsersPage() {
     setError("");
     setMessage("");
     try {
-      const isAdmin = role === "admin" || role === "super_admin";
+      const safeRole = assertEnum("Role", role, ["manager", "admin"] as const);
+      const safeOrg = toRequiredText("Organization", selectedOrg);
+      const isAdmin = safeRole === "admin";
       await superAdminApi.updateUserRole(user._id, {
-        role,
+        role: safeRole,
         admin_flag: isAdmin,
         is_approved: user.is_approved,
-        organization_id: selectedOrg,
+        organization_id: safeOrg,
       });
       setMessage(`Updated role for ${user.name}`);
       await usersQ.refetch();
@@ -67,13 +70,19 @@ export default function SuperAdminUsersPage() {
     setError("");
     setMessage("");
     try {
+      const safeName = toRequiredText("Name", editName);
+      const safePhone = toRequiredText("Phone", editPhone);
+      const safeEmail = toOptionalText(editEmail);
+      const safePassword = toOptionalText(editPassword);
+      const safeRole = assertEnum("Role", editRole, ["manager", "admin"] as const);
+      const safeOrg = toRequiredText("Organization", selectedOrg);
       await superAdminApi.updateUserDetails(editingId, {
-        name: editName,
-        phone: editPhone,
-        email: editEmail,
-        password: editPassword || undefined,
-        role: editRole,
-        organization_id: selectedOrg,
+        name: safeName,
+        phone: safePhone,
+        email: safeEmail,
+        password: safePassword,
+        role: safeRole,
+        organization_id: safeOrg,
       });
       setMessage("User details updated");
       setEditingId(null);

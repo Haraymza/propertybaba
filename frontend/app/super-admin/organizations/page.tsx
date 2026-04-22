@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Building2, Layers } from "lucide-react";
 import { superAdminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
+import { toOptionalText, toRequiredText } from "@/lib/validators";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
@@ -31,7 +32,9 @@ export default function OrganizationsPage() {
     setMessage("");
     setError("");
     try {
-      await superAdminApi.createOrganization({ name, description });
+      const safeName = toRequiredText("Organization name", name);
+      const safeDescription = toOptionalText(description);
+      await superAdminApi.createOrganization({ name: safeName, description: safeDescription });
       setName("");
       setDescription("");
       setMessage("Organization created");

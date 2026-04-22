@@ -11,6 +11,8 @@ export function Topbar({
   userName,
   organizationName,
   showOrganization,
+  sidebarCollapsed,
+  onToggleDesktopSidebar,
   onToggleMobileSidebar,
   onLogout,
 }: {
@@ -18,6 +20,8 @@ export function Topbar({
   userName: string;
   organizationName?: string | null;
   showOrganization: boolean;
+  sidebarCollapsed: boolean;
+  onToggleDesktopSidebar: () => void;
   onToggleMobileSidebar: () => void;
   onLogout: () => void;
 }) {
@@ -30,7 +34,15 @@ export function Topbar({
           <Button variant="secondary" onClick={onToggleMobileSidebar} className="h-9 w-9 px-0 lg:hidden">
             <Menu className="h-4 w-4" />
           </Button>
-          <div className="h-5" />
+          <Button
+            variant="ghost"
+            onClick={onToggleDesktopSidebar}
+            className="hidden h-8 w-8 px-0 text-[var(--muted)] lg:-ml-3 lg:inline-flex"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            <span className="text-[18px] font-bold leading-none text-[var(--muted)]">{sidebarCollapsed ? ">" : "<"}</span>
+          </Button>
         </div>
 
         {showOrganization ? (

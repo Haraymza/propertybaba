@@ -6,6 +6,7 @@ import { Activity } from "lucide-react";
 import { adminApi, dashboardApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatPKRCompact } from "@/lib/formatters";
+import { toRequiredNumber } from "@/lib/validators";
 import { StatCard } from "@/components/dashboard/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,7 @@ export default function AdminDashboardPage() {
   const [agentPercent, setAgentPercent] = useState(2);
   const [savingDefaults, setSavingDefaults] = useState(false);
   const [error, setError] = useState("");
+  const sampleDealAmount = 10_000_000;
 
   useEffect(() => {
     const defaults = defaultsQ.data?.data;
@@ -32,7 +34,9 @@ export default function AdminDashboardPage() {
     setSavingDefaults(true);
     setError("");
     try {
-      await adminApi.updateCommissionDefaults({ org_percent: orgPercent, agent_percent: agentPercent });
+      const safeOrgPercent = toRequiredNumber("Organization rate", orgPercent, { min: 0, max: 100 });
+      const safeAgentPercent = toRequiredNumber("Agent rate", agentPercent, { min: 0, max: 100 });
+      await adminApi.updateCommissionDefaults({ org_percent: safeOrgPercent, agent_percent: safeAgentPercent });
       await defaultsQ.refetch();
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update commission defaults"));
@@ -61,7 +65,7 @@ export default function AdminDashboardPage() {
               <Input type="number" value={orgPercent} onChange={(e) => setOrgPercent(Number(e.target.value || 0))} />
             </label>
             <label className="space-y-1 text-sm">
-              <span className="text-[var(--muted)]">Agent Rate (%)</span>
+              <span className="text-[var(--muted)]">Agent Rate (% of deal value)</span>
               <Input type="number" value={agentPercent} onChange={(e) => setAgentPercent(Number(e.target.value || 0))} />
             </label>
           </div>
@@ -69,6 +73,44 @@ export default function AdminDashboardPage() {
           <Button onClick={updateDefaults} disabled={savingDefaults}>
             {savingDefaults ? "Saving..." : "Save Defaults"}
           </Button>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>How Commission Is Calculated</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-[var(--muted)]">These formulas are used whenever a deal uses default commission settings.</p>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+              <p className="font-medium">Organization Revenue</p>
+              <p className="mt-1 text-[var(--muted)]">Deal Amount x Organization Rate (%)</p>
+            </div>
+            <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+              <p className="font-medium">Agent Commission</p>
+              <p className="mt-1 text-[var(--muted)]">Deal Amount x Agent Rate (%)</p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+            <p className="font-medium">Organization Profit</p>
+            <p className="mt-1 text-[var(--muted)]">Organization Revenue - Agent Commission</p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--muted)]">Example (Deal Amount: {sampleDealAmount.toLocaleString()})</p>
+            <p className="mt-1 text-[var(--muted)]">
+              Organization Revenue: {sampleDealAmount.toLocaleString()} x {orgPercent}% ={" "}
+              {((sampleDealAmount * orgPercent) / 100).toLocaleString()}
+            </p>
+            <p className="text-[var(--muted)]">
+              Agent Commission: {sampleDealAmount.toLocaleString()} x {agentPercent}% ={" "}
+              {((sampleDealAmount * agentPercent) / 100).toLocaleString()}
+            </p>
+            <p className="text-[var(--muted)]">
+              Organization Profit: {((sampleDealAmount * orgPercent) / 100).toLocaleString()} -{" "}
+              {((sampleDealAmount * agentPercent) / 100).toLocaleString()} ={" "}
+              {((sampleDealAmount * orgPercent) / 100 - (sampleDealAmount * agentPercent) / 100).toLocaleString()}
+            </p>
+          </div>
         </CardContent>
       </Card>
       <Card>
