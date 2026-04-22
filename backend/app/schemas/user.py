@@ -36,6 +36,16 @@ class AdminCreateUserRequest(BaseModel):
     role: str = "manager"
 
 
+class SuperAdminCreateUserRequest(BaseModel):
+    name: str = Field(..., min_length=2, max_length=100)
+    phone: str = Field(..., min_length=7, max_length=20)
+    email: str | None = None
+    password: str = Field(..., min_length=6)
+    role: str = "manager"
+    organization_id: str = Field(..., min_length=1)
+    is_approved: bool = True
+
+
 class UserUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=2, max_length=100)
     phone: str | None = Field(None, min_length=7, max_length=20)

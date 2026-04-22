@@ -6,7 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.core.database import get_db
 from app.schemas.organization import OrganizationCreateRequest, OrganizationResponse
-from app.schemas.user import PendingUsersResponse, UserResponse, UserUpdateRequest
+from app.schemas.user import PendingUsersResponse, SuperAdminCreateUserRequest, UserResponse, UserUpdateRequest
 from app.security.deps import require_super_admin
 from app.security.tokens import hash_password
 from app.services.super_admin_service import (
@@ -17,6 +17,51 @@ from app.services.super_admin_service import (
 )
 
 router = APIRouter()
+
+
+@router.post("/users", response_model=UserResponse, status_code=201)
+async def create_user_by_super_admin(
+    payload: SuperAdminCreateUserRequest,
+    _: dict = Depends(require_super_admin),
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> UserResponse:
+    if payload.role not in {"manager", "admin"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+    if not ObjectId.is_valid(payload.organization_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid organization id")
+
+    org = await db.organizations.find_one({"_id": ObjectId(payload.organization_id)})
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    existing_phone = await db.users.find_one({"phone": payload.phone})
+    if existing_phone:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phone already in use")
+
+    email = payload.email.strip().lower() if payload.email else None
+    if email:
+        existing_email = await db.users.find_one({"email": email})
+        if existing_email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+
+    now = datetime.now(timezone.utc)
+    new_user = {
+        "name": payload.name,
+        "phone": payload.phone,
+        "password_hash": hash_password(payload.password),
+        "role": payload.role,
+        "admin_flag": payload.role == "admin",
+        "is_approved": payload.is_approved,
+        "organization_id": ObjectId(payload.organization_id),
+        "created_at": now,
+        "updated_at": now,
+    }
+    if email:
+        new_user["email"] = email
+
+    result = await db.users.insert_one(new_user)
+    new_user["_id"] = result.inserted_id
+    return UserResponse(**new_user)
 
 
 @router.post("/organizations", response_model=OrganizationResponse, status_code=201)

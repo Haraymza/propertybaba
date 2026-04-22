@@ -221,6 +221,8 @@ export const authApi = {
 export const superAdminApi = {
   createOrganization: (payload: { name: string; description?: string; owner_user_id?: string }) =>
     api.post("/api/super-admin/organizations", payload),
+  createUser: (payload: { name: string; phone: string; email?: string; password: string; role: "manager" | "admin"; organization_id: string; is_approved?: boolean }) =>
+    api.post<User>("/api/super-admin/users", payload),
   listOrganizations: () => api.get("/api/super-admin/organizations"),
   listPendingUsers: () => api.get<{ users: User[] }>("/api/super-admin/users/pending"),
   assignOrganization: (userId: string, organizationId: string) =>
