@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck } from "lucide-react";
 import { superAdminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -26,6 +26,7 @@ export default function SuperAdminUsersPage() {
   const [editEmail, setEditEmail] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState("manager");
+  const queryClient = useQueryClient();
   const orgsQ = useQuery({ queryKey: ["organizations"], queryFn: () => superAdminApi.listOrganizations() });
   const usersQ = useQuery({
     queryKey: ["org-users", selectedOrg],
@@ -50,7 +51,7 @@ export default function SuperAdminUsersPage() {
         organization_id: safeOrg,
       });
       setMessage(`Updated role for ${user.name}`);
-      await usersQ.refetch();
+      queryClient.invalidateQueries({ queryKey: ["org-users", selectedOrg] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update role"));
     }
@@ -86,7 +87,7 @@ export default function SuperAdminUsersPage() {
       });
       setMessage("User details updated");
       setEditingId(null);
-      await usersQ.refetch();
+      queryClient.invalidateQueries({ queryKey: ["org-users", selectedOrg] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update user details"));
     }
@@ -143,7 +144,7 @@ export default function SuperAdminUsersPage() {
                     </td>
                     <td>
                       <div className="flex gap-2">
-                        <Button variant="secondary" onClick={() => usersQ.refetch()}>
+                        <Button variant="secondary" onClick={() => queryClient.invalidateQueries({ queryKey: ["org-users", selectedOrg] })}>
                           Refresh
                         </Button>
                         <Button variant="ghost" onClick={() => startEdit(u)}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Layers } from "lucide-react";
 import { superAdminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -20,6 +20,7 @@ export default function OrganizationsPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   const orgsQuery = useQuery({
     queryKey: ["organizations"],
@@ -38,7 +39,7 @@ export default function OrganizationsPage() {
       setName("");
       setDescription("");
       setMessage("Organization created");
-      await orgsQuery.refetch();
+      queryClient.invalidateQueries({ queryKey: ["organizations"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to create organization"));
     } finally {

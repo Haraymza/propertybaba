@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Handshake, Kanban, Search } from "lucide-react";
 import { customersApi, dealsApi, propertiesApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -31,6 +31,7 @@ export default function ManagerDealsPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const customersQ = useQuery({ queryKey: ["customers"], queryFn: () => customersApi.list() });
   const propertiesQ = useQuery({ queryKey: ["properties"], queryFn: () => propertiesApi.list() });
@@ -110,7 +111,9 @@ export default function ManagerDealsPage() {
       setShowCustomerDropdown(false);
       setShowPropertyDropdown(false);
       setPrice(0);
-      await Promise.all([dealsQ.refetch(), propertiesQ.refetch(), customersQ.refetch()]);
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
+      queryClient.invalidateQueries({ queryKey: ["properties"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to create deal"));
     } finally {
@@ -122,7 +125,9 @@ export default function ManagerDealsPage() {
     setError("");
     try {
       await dealsApi.update(id, { status });
-      await Promise.all([dealsQ.refetch(), propertiesQ.refetch(), customersQ.refetch()]);
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
+      queryClient.invalidateQueries({ queryKey: ["properties"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update deal"));
     }
@@ -132,7 +137,7 @@ export default function ManagerDealsPage() {
     setError("");
     try {
       await dealsApi.remove(id);
-      await dealsQ.refetch();
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to archive deal"));
     }
@@ -142,7 +147,7 @@ export default function ManagerDealsPage() {
     setError("");
     try {
       await dealsApi.restore(id);
-      await dealsQ.refetch();
+      queryClient.invalidateQueries({ queryKey: ["deals"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to restore deal"));
     }

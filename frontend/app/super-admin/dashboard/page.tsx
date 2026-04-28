@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { superAdminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { assertEnum, toOptionalText, toRequiredText } from "@/lib/validators";
@@ -22,6 +22,7 @@ export default function SuperAdminDashboardPage() {
   const [createLoading, setCreateLoading] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createMessage, setCreateMessage] = useState("");
+  const queryClient = useQueryClient();
 
   const orgsQ = useQuery({
     queryKey: ["organizations"],
@@ -61,7 +62,7 @@ export default function SuperAdminDashboardPage() {
       setCreateEmail("");
       setCreatePassword("");
       setCreateRole("manager");
-      await pendingQ.refetch();
+      queryClient.invalidateQueries({ queryKey: ["pending-users"] });
     } catch (err: unknown) {
       setCreateError(getApiErrorMessage(err, "Failed to create user"));
     } finally {

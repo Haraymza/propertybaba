@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
 import { adminApi, customersApi, dashboardApi, propertiesApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -24,6 +24,7 @@ export default function AdminDashboardPage() {
   const [savingDefaults, setSavingDefaults] = useState(false);
   const [error, setError] = useState("");
   const sampleDealAmount = 10_000_000;
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const defaults = defaultsQ.data?.data;
@@ -39,7 +40,7 @@ export default function AdminDashboardPage() {
       const safeOrgPercent = toRequiredNumber("Organization rate", orgPercent, { min: 0, max: 100 });
       const safeAgentPercent = toRequiredNumber("Agent rate", agentPercent, { min: 0, max: 100 });
       await adminApi.updateCommissionDefaults({ org_percent: safeOrgPercent, agent_percent: safeAgentPercent });
-      await defaultsQ.refetch();
+      queryClient.invalidateQueries({ queryKey: ["commission-defaults"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update commission defaults"));
     } finally {

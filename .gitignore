@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 .venv/
 .env
-
+.env.example
 # Node / Next
 node_modules/
 .next/
@@ -17,3 +17,5 @@ Thumbs.db
 
 # Logs
 *.log
+
+create_super_admin.py

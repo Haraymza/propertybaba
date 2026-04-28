@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Building2, Filter } from "lucide-react";
 import { propertiesApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -49,6 +49,7 @@ export default function ManagerPropertiesPage() {
   const [noteText, setNoteText] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["properties", search, showArchived],
     queryFn: () => propertiesApi.list({ q: search || undefined, include_archived: showArchived }),
@@ -109,7 +110,7 @@ export default function ManagerPropertiesPage() {
       setSize("");
       setSellerName("");
       setSellerPhoneInput("");
-      await query.refetch();
+      queryClient.invalidateQueries({ queryKey: ["properties"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to create property"));
     } finally {
@@ -119,12 +120,12 @@ export default function ManagerPropertiesPage() {
 
   const archiveProperty = async (id: string) => {
     await propertiesApi.remove(id);
-    await query.refetch();
+    queryClient.invalidateQueries({ queryKey: ["properties"] });
   };
 
   const restoreProperty = async (id: string) => {
     await propertiesApi.restore(id);
-    await query.refetch();
+    queryClient.invalidateQueries({ queryKey: ["properties"] });
   };
   const startEdit = (id: string) => {
     const property = (query.data?.data || []).find((p) => p._id === id);
@@ -162,7 +163,7 @@ export default function ManagerPropertiesPage() {
         seller_phone: safeSellerPhones,
       });
       setEditingId(null);
-      await query.refetch();
+      queryClient.invalidateQueries({ queryKey: ["properties"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update property"));
     }
@@ -175,7 +176,7 @@ export default function ManagerPropertiesPage() {
     try {
       await propertiesApi.addNote(notesPropertyId, noteText.trim());
       setNoteText("");
-      await query.refetch();
+      queryClient.invalidateQueries({ queryKey: ["properties"] });
     } finally {
       setNotesSaving(false);
     }
@@ -184,7 +185,7 @@ export default function ManagerPropertiesPage() {
   const deletePropertyNote = async (propertyId: string, noteId: string) => {
     if (!window.confirm("Delete this note?")) return;
     await propertiesApi.deleteNote(propertyId, noteId);
-    await query.refetch();
+    queryClient.invalidateQueries({ queryKey: ["properties"] });
   };
 
   return (

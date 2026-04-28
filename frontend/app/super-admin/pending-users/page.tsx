@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserCheck } from "lucide-react";
 import { superAdminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -19,6 +19,7 @@ export default function PendingUsersPage() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [selectedOrgByUser, setSelectedOrgByUser] = useState<Record<string, string>>({});
+  const queryClient = useQueryClient();
 
   const pendingQuery = useQuery({
     queryKey: ["pending-users"],
@@ -40,7 +41,7 @@ export default function PendingUsersPage() {
       await superAdminApi.assignOrganization(userId, orgId);
       await superAdminApi.approveUser(userId);
       setMessage("User assigned and approved");
-      await pendingQuery.refetch();
+      queryClient.invalidateQueries({ queryKey: ["pending-users"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to approve user"));
     }

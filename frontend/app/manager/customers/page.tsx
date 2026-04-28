@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Filter, UserCircle2 } from "lucide-react";
 import { customersApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -42,6 +42,7 @@ export default function ManagerCustomersPage() {
   const [noteText, setNoteText] = useState("");
   const [notesSaving, setNotesSaving] = useState(false);
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["customers", search, showArchived, filterPreference, filterPropertyType, filterPriority],
     queryFn: () =>
@@ -78,7 +79,7 @@ export default function ManagerCustomersPage() {
       setSize("");
       setPropertyType("House");
       setRequirements("");
-      await query.refetch();
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to create customer"));
     } finally {
@@ -88,12 +89,12 @@ export default function ManagerCustomersPage() {
 
   const archiveCustomer = async (id: string) => {
     await customersApi.remove(id);
-    await query.refetch();
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
   };
 
   const restoreCustomer = async (id: string) => {
     await customersApi.restore(id);
-    await query.refetch();
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
   };
   const startEdit = (id: string) => {
     const customer = (query.data?.data || []).find((c) => c._id === id);
@@ -126,7 +127,7 @@ export default function ManagerCustomersPage() {
         requirements: editRequirements,
       });
       setEditingId(null);
-      await query.refetch();
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update customer"));
     }
@@ -139,7 +140,7 @@ export default function ManagerCustomersPage() {
     try {
       await customersApi.addNote(notesCustomerId, noteText.trim());
       setNoteText("");
-      await query.refetch();
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
     } finally {
       setNotesSaving(false);
     }
@@ -148,7 +149,7 @@ export default function ManagerCustomersPage() {
   const deleteCustomerNote = async (customerId: string, noteId: string) => {
     if (!window.confirm("Delete this note?")) return;
     await customersApi.deleteNote(customerId, noteId);
-    await query.refetch();
+    queryClient.invalidateQueries({ queryKey: ["customers"] });
   };
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shield, User } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
@@ -28,6 +28,7 @@ export default function AdminTeamPage() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const q = useQuery({ queryKey: ["admin-users"], queryFn: () => adminApi.users() });
+  const queryClient = useQueryClient();
 
   const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
@@ -51,7 +52,7 @@ export default function AdminTeamPage() {
       setEmail("");
       setPassword("");
       setRole("manager");
-      await q.refetch();
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to create team user"));
     } finally {
@@ -62,7 +63,7 @@ export default function AdminTeamPage() {
   const handleToggle = async (userId: string, isApproved: boolean) => {
     if (isApproved) await adminApi.deactivate(userId);
     else await adminApi.activate(userId);
-    await q.refetch();
+    queryClient.invalidateQueries({ queryKey: ["admin-users"] });
   };
 
   const startEdit = (u: { _id: string; name: string; phone: string; email?: string; role: string }) => {
@@ -91,7 +92,7 @@ export default function AdminTeamPage() {
         role: safeRole,
       });
       setEditingId(null);
-      await q.refetch();
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, "Failed to update user"));
     }
