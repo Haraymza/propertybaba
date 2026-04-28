@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity } from "lucide-react";
-import { adminApi, dashboardApi } from "@/lib/api";
+import { adminApi, customersApi, dashboardApi, propertiesApi } from "@/lib/api";
 import { getApiErrorMessage } from "@/lib/api-errors";
 import { formatPKRCompact } from "@/lib/formatters";
 import { toRequiredNumber } from "@/lib/validators";
@@ -16,6 +16,8 @@ import { PageHeader } from "@/components/layout/page-header";
 export default function AdminDashboardPage() {
   const q = useQuery({ queryKey: ["dashboard-stats"], queryFn: () => dashboardApi.stats() });
   const defaultsQ = useQuery({ queryKey: ["commission-defaults"], queryFn: () => adminApi.getCommissionDefaults() });
+  const recentCustomersQ = useQuery({ queryKey: ["admin-recent-customers"], queryFn: () => customersApi.list() });
+  const recentPropertiesQ = useQuery({ queryKey: ["admin-recent-properties"], queryFn: () => propertiesApi.list() });
   const s = q.data?.data;
   const [orgPercent, setOrgPercent] = useState(10);
   const [agentPercent, setAgentPercent] = useState(2);
@@ -53,6 +55,46 @@ export default function AdminDashboardPage() {
         <StatCard label="Properties" value={s?.total_properties ?? 0} />
         <StatCard label="Deals" value={s?.total_deals ?? 0} />
         <StatCard label="Revenue" value={formatPKRCompact(s?.total_revenue ?? 0)} />
+      </section>
+      <section className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Customers</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentCustomersQ.isLoading ? <p className="text-sm text-[var(--muted)]">Loading customers...</p> : null}
+            {!recentCustomersQ.isLoading && !(recentCustomersQ.data?.data || []).length ? (
+              <p className="text-sm text-[var(--muted)]">No customers yet.</p>
+            ) : null}
+            <div className="space-y-2">
+              {(recentCustomersQ.data?.data || []).slice(0, 10).map((customer) => (
+                <div key={customer._id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+                  <p className="font-medium">{customer.name}</p>
+                  <p className="text-xs text-[var(--muted)]">{customer.phone_number?.join(", ") || "-"}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Properties</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentPropertiesQ.isLoading ? <p className="text-sm text-[var(--muted)]">Loading properties...</p> : null}
+            {!recentPropertiesQ.isLoading && !(recentPropertiesQ.data?.data || []).length ? (
+              <p className="text-sm text-[var(--muted)]">No properties yet.</p>
+            ) : null}
+            <div className="space-y-2">
+              {(recentPropertiesQ.data?.data || []).slice(0, 10).map((property) => (
+                <div key={property._id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-3">
+                  <p className="font-medium">{property.title}</p>
+                  <p className="text-xs text-[var(--muted)]">{property.address}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </section>
       <Card>
         <CardHeader>

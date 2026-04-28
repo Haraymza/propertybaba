@@ -26,6 +26,9 @@ export default function ManagerCustomersPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [filterPreference, setFilterPreference] = useState<"" | "buy" | "rent">("");
+  const [filterPropertyType, setFilterPropertyType] = useState<"" | "House" | "Plot" | "Shop" | "Flat">("");
+  const [filterPriority, setFilterPriority] = useState<"" | "Low" | "Medium" | "High">("");
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -40,8 +43,15 @@ export default function ManagerCustomersPage() {
   const [notesSaving, setNotesSaving] = useState(false);
   const { user } = useAuthStore();
   const query = useQuery({
-    queryKey: ["customers", search, showArchived],
-    queryFn: () => customersApi.list({ q: search || undefined, include_archived: showArchived }),
+    queryKey: ["customers", search, showArchived, filterPreference, filterPropertyType, filterPriority],
+    queryFn: () =>
+      customersApi.list({
+        q: search || undefined,
+        include_archived: showArchived,
+        preference: filterPreference || undefined,
+        property_type: filterPropertyType || undefined,
+        priority: filterPriority || undefined,
+      }),
   });
 
   const createCustomer = async (e: FormEvent) => {
@@ -215,7 +225,27 @@ export default function ManagerCustomersPage() {
           <div className="mt-2 space-y-2">
             <div className="relative">
               <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search customer..." className="pl-9" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search customer name or phone..." className="pl-9" />
+            </div>
+            <div className="grid gap-2 md:grid-cols-3">
+              <Select value={filterPreference} onChange={(e) => setFilterPreference(e.target.value as "" | "buy" | "rent")}>
+                <option value="">All preferences</option>
+                <option value="buy">buy</option>
+                <option value="rent">rent</option>
+              </Select>
+              <Select value={filterPropertyType} onChange={(e) => setFilterPropertyType(e.target.value as "" | "House" | "Plot" | "Shop" | "Flat")}>
+                <option value="">All property types</option>
+                <option value="House">House</option>
+                <option value="Plot">Plot</option>
+                <option value="Shop">Shop</option>
+                <option value="Flat">Flat</option>
+              </Select>
+              <Select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value as "" | "Low" | "Medium" | "High")}>
+                <option value="">All priorities</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </Select>
             </div>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} />

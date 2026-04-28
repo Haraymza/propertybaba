@@ -21,10 +21,21 @@ router = APIRouter()
 async def get_customers(
     include_archived: bool = False,
     q: str | None = None,
+    preference: str | None = None,
+    property_type: str | None = None,
+    priority: str | None = None,
     user: dict = Depends(require_organization),
     db: AsyncIOMotorDatabase = Depends(get_db),
 ):
-    docs = await list_customers(db, user, include_archived=include_archived, q=q)
+    docs = await list_customers(
+        db,
+        user,
+        include_archived=include_archived,
+        q=q,
+        preference=preference,
+        property_type=property_type,
+        priority=priority,
+    )
     return [CustomerResponse(**doc) for doc in docs]
 
 

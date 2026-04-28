@@ -45,12 +45,29 @@ async def create_customer(db: AsyncIOMotorDatabase, payload: dict, user: dict) -
     return doc
 
 
-async def list_customers(db: AsyncIOMotorDatabase, user: dict, include_archived: bool = False, q: str | None = None) -> list[dict]:
+async def list_customers(
+    db: AsyncIOMotorDatabase,
+    user: dict,
+    include_archived: bool = False,
+    q: str | None = None,
+    preference: str | None = None,
+    property_type: str | None = None,
+    priority: str | None = None,
+) -> list[dict]:
     filters: dict = {"organization_id": user["organization_id"]}
     if not include_archived:
         filters["is_deleted"] = {"$ne": True}
     if q:
-        filters["name"] = {"$regex": q, "$options": "i"}
+        filters["$or"] = [
+            {"name": {"$regex": q, "$options": "i"}},
+            {"phone_number": {"$regex": q, "$options": "i"}},
+        ]
+    if preference in {"buy", "rent"}:
+        filters["preference"] = preference
+    if property_type:
+        filters["property_type"] = property_type
+    if priority in {"Low", "Medium", "High"}:
+        filters["priority"] = priority
     cursor = db.customers.find(filters).sort("created_at", -1)
     customers = await cursor.to_list(length=300)
     creator_ids = [doc.get("created_by") for doc in customers if doc.get("created_by")]

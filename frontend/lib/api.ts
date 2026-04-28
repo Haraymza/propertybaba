@@ -240,7 +240,8 @@ export const superAdminApi = {
 };
 
 export const customersApi = {
-  list: (params?: { include_archived?: boolean; q?: string }) => api.get<Customer[]>("/api/customers", { params }),
+  list: (params?: { include_archived?: boolean; q?: string; preference?: "buy" | "rent"; property_type?: string; priority?: "Low" | "Medium" | "High" }) =>
+    api.get<Customer[]>("/api/customers", { params }),
   create: (payload: Omit<Customer, "_id" | "status" | "properties_assigned" | "created_at">) => api.post<Customer>("/api/customers", payload),
   update: (id: string, payload: Partial<Customer>) => api.put<Customer>(`/api/customers/${id}`, payload),
   remove: (id: string) => api.delete<{ message: string }>(`/api/customers/${id}`),
